@@ -31,8 +31,8 @@ One .NET 10 WinForms exe, `TeamsAlwaysActive.exe`, two entry modes.
   - `wantActive = mode == On || (mode == Auto && ClaudeBusy())`
   - if `wantActive && idle >= 4 min` → `SendInput` one F15 key down/up.
   - Never sends while the user is active (idle < 4 min).
-- `ClaudeBusy()` = any file in `%LOCALAPPDATA%\TeamsAlwaysActive\busy\` modified within the last 3 h
-  (older = stale from a crash, ignored and deleted).
+- `ClaudeBusy()` = any file in `%LOCALAPPDATA%\TeamsAlwaysActive\busy\` modified within the last 12 h
+  (older = stale from a crash, ignored and deleted). 12 h, not shorter, so multi-hour Claude runs aren't dropped.
 
 ### Hook mode (`--hook busy|idle`)
 
