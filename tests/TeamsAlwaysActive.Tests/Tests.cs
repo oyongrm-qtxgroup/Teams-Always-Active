@@ -122,3 +122,66 @@ public class HookTests : IDisposable
     public void Unknown_verb_returns_0() =>
         Assert.Equal(0, Hook.Run("bogus", Json("s1"), new State(root)));
 }
+
+public class InstallerTests : IDisposable
+{
+    readonly string dir = Path.Combine(Path.GetTempPath(), "taa-" + Guid.NewGuid());
+    string Settings => Path.Combine(dir, "settings.json");
+    const string Exe = @"C:\Users\A B\AppData\Local\TeamsAlwaysActive\app\TeamsAlwaysActive.exe";
+
+    public InstallerTests() => Directory.CreateDirectory(dir);
+    public void Dispose() => Directory.Delete(dir, true);
+
+    JsonObject Read() => JsonNode.Parse(File.ReadAllText(Settings))!.AsObject();
+
+    [Fact]
+    public void Merge_into_missing_file_adds_three_events()
+    {
+        Installer.MergeHooks(Settings, Exe);
+        var hooks = Read()["hooks"]!.AsObject();
+        Assert.Equal(
+            "\"C:/Users/A B/AppData/Local/TeamsAlwaysActive/app/TeamsAlwaysActive.exe\" --hook busy",
+            (string?)hooks["UserPromptSubmit"]![0]!["hooks"]![0]!["command"]);
+        Assert.Equal("command", (string?)hooks["Stop"]![0]!["hooks"]![0]!["type"]);
+        Assert.EndsWith("--hook idle", (string?)hooks["SessionEnd"]![0]!["hooks"]![0]!["command"]);
+    }
+
+    [Fact]
+    public void Merge_preserves_other_settings_and_hooks_and_is_idempotent()
+    {
+        File.WriteAllText(Settings, """
+            { "model": "opus", "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "other.exe" } ] } ] } }
+            """);
+        Installer.MergeHooks(Settings, Exe);
+        Installer.MergeHooks(Settings, Exe);
+        var root = Read();
+        Assert.Equal("opus", (string?)root["model"]);
+        var stop = root["hooks"]!["Stop"]!.AsArray();
+        Assert.Equal(2, stop.Count);
+        Assert.Equal("other.exe", (string?)stop[0]!["hooks"]![0]!["command"]);
+        Assert.Single(root["hooks"]!["UserPromptSubmit"]!.AsArray());
+        Assert.True(File.Exists(Settings + ".bak"));
+    }
+
+    [Fact]
+    public void Remove_strips_only_ours()
+    {
+        File.WriteAllText(Settings, """
+            { "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "other.exe" } ] } ] } }
+            """);
+        Installer.MergeHooks(Settings, Exe);
+        Installer.RemoveHooks(Settings);
+        var hooks = Read()["hooks"]!.AsObject();
+        Assert.Single(hooks["Stop"]!.AsArray());
+        Assert.False(hooks.ContainsKey("UserPromptSubmit"));
+        Assert.False(hooks.ContainsKey("SessionEnd"));
+    }
+
+    [Fact]
+    public void Merge_refuses_non_object_settings()
+    {
+        File.WriteAllText(Settings, "[]");
+        Assert.ThrowsAny<Exception>(() => Installer.MergeHooks(Settings, Exe));
+        Assert.Equal("[]", File.ReadAllText(Settings));
+    }
+}
