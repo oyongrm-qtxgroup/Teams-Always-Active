@@ -1,12 +1,11 @@
-using System.Drawing.Drawing2D;
-
 namespace TeamsAlwaysActive;
 
 public sealed class TrayApp : ApplicationContext
 {
     readonly State state;
     readonly NotifyIcon tray = new() { Visible = true };
-    readonly Icon green = Dot(Color.LimeGreen), grey = Dot(Color.Gray);
+    readonly Icon green = Icons.Create(active: true, SystemInformation.SmallIconSize.Width),
+        grey = Icons.Create(active: false, SystemInformation.SmallIconSize.Width);
     readonly System.Windows.Forms.Timer timer = new() { Interval = 30_000 };
     readonly Dictionary<Mode, ToolStripMenuItem> items = new();
     Mode mode;
@@ -66,17 +65,5 @@ public sealed class TrayApp : ApplicationContext
         timer.Stop();
         tray.Visible = false;
         base.ExitThreadCore();
-    }
-
-    static Icon Dot(Color color)
-    {
-        using var bmp = new Bitmap(16, 16);
-        using (var g = Graphics.FromImage(bmp))
-        using (var brush = new SolidBrush(color))
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.FillEllipse(brush, 1, 1, 14, 14);
-        }
-        return Icon.FromHandle(bmp.GetHicon()); // ponytail: two icons for the app's lifetime, HICON never freed
     }
 }
