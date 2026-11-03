@@ -30,3 +30,61 @@ public class DecisionTests
         Assert.False(Decision.IsFresh(now.AddHours(-12), now));
     }
 }
+
+public class StateTests : IDisposable
+{
+    readonly string root = Path.Combine(Path.GetTempPath(), "taa-" + Guid.NewGuid());
+    State S => new(root);
+    public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
+
+    [Fact]
+    public void Mode_defaults_to_Off_and_round_trips()
+    {
+        Assert.Equal(Mode.Off, S.ReadMode());
+        S.WriteMode(Mode.Auto);
+        Assert.Equal(Mode.Auto, S.ReadMode());
+    }
+
+    [Theory]
+    [InlineData("garbage")]
+    [InlineData("7")]
+    public void Mode_invalid_file_reads_Off(string content)
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "mode.txt"), content);
+        Assert.Equal(Mode.Off, S.ReadMode());
+    }
+
+    [Fact]
+    public void Touch_then_Remove_toggles_busy()
+    {
+        var now = DateTime.UtcNow;
+        Assert.False(S.AnyBusy(now));
+        S.Touch("abc-123");
+        Assert.True(S.AnyBusy(now));
+        S.Remove("abc-123");
+        Assert.False(S.AnyBusy(now));
+    }
+
+    [Fact]
+    public void Remove_without_dir_does_not_throw() => S.Remove("nope");
+
+    [Fact]
+    public void Stale_marker_is_ignored_and_deleted()
+    {
+        S.Touch("old");
+        var file = Path.Combine(S.BusyDir, "old");
+        File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddHours(-13));
+        Assert.False(S.AnyBusy(DateTime.UtcNow));
+        Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public void Session_id_is_sanitized_to_stay_inside_busy_dir()
+    {
+        S.Touch("../../evil");
+        Assert.True(File.Exists(Path.Combine(S.BusyDir, "evil")));
+        S.Touch(null);
+        Assert.True(File.Exists(Path.Combine(S.BusyDir, "unknown")));
+    }
+}
