@@ -88,3 +88,37 @@ public class StateTests : IDisposable
         Assert.True(File.Exists(Path.Combine(S.BusyDir, "unknown")));
     }
 }
+
+public class HookTests : IDisposable
+{
+    readonly string root = Path.Combine(Path.GetTempPath(), "taa-" + Guid.NewGuid());
+    public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
+
+    static StringReader Json(string id) =>
+        new($$"""{"session_id":"{{id}}","hook_event_name":"UserPromptSubmit"}""");
+
+    [Fact]
+    public void Busy_then_idle_round_trips()
+    {
+        var s = new State(root);
+        Assert.Equal(0, Hook.Run("busy", Json("s1"), s));
+        Assert.True(s.AnyBusy(DateTime.UtcNow));
+        Assert.Equal(0, Hook.Run("idle", Json("s1"), s));
+        Assert.False(s.AnyBusy(DateTime.UtcNow));
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("")]
+    public void Bad_input_returns_0_and_does_nothing(string stdin)
+    {
+        var s = new State(root);
+        Assert.Equal(0, Hook.Run("busy", new StringReader(stdin), s));
+        Assert.False(s.AnyBusy(DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Unknown_verb_returns_0() =>
+        Assert.Equal(0, Hook.Run("bogus", Json("s1"), new State(root)));
+}
