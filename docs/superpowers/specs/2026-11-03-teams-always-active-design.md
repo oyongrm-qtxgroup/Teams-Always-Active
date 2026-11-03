@@ -42,11 +42,12 @@ One .NET 10 WinForms exe, `TeamsAlwaysActive.exe`, two entry modes.
   not plain desktop chat):
   - `UserPromptSubmit` → `--hook busy`
   - `Stop`, `SessionEnd` → `--hook idle`
+  - `Notification` (matcher `idle_prompt`) → `--hook idle` (Esc-interrupt skips `Stop`)
 
 ### Install
 
 - `dotnet publish` to a fixed folder (e.g. `%LOCALAPPDATA%\TeamsAlwaysActive\app\`).
-- Shortcut in `shell:startup` for logon start.
+- HKCU `...\CurrentVersion\Run` value for logon start.
 - Hook entries added to user `settings.json` (merged, not overwritten).
 
 ## Error handling

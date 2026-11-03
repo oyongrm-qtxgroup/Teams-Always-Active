@@ -8,8 +8,9 @@ public static class Installer
 {
     const string ExeName = "TeamsAlwaysActive.exe";
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    static readonly (string Event, string Verb)[] Events =
-        [("UserPromptSubmit", "busy"), ("Stop", "idle"), ("SessionEnd", "idle")];
+    // ponytail: Esc-interrupt skips Stop; idle_prompt fires after ~60 s waiting for input, so the marker can't linger
+    static readonly (string Event, string Verb, string? Matcher)[] Events =
+        [("UserPromptSubmit", "busy", null), ("Stop", "idle", null), ("SessionEnd", "idle", null), ("Notification", "idle", "idle_prompt")];
 
     public static string DefaultSettingsPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "settings.json");
@@ -21,18 +22,18 @@ public static class Installer
         root["hooks"] = hooks;
         StripOurs(hooks);
         var exe = exePath.Replace('\\', '/'); // ponytail: forward slashes work in both Git Bash and cmd
-        foreach (var (ev, verb) in Events)
+        foreach (var (ev, verb, matcher) in Events)
         {
             var groups = hooks[ev] as JsonArray ?? new JsonArray();
             hooks[ev] = groups;
-            groups.Add(new JsonObject
+            var group = new JsonObject();
+            if (matcher != null) group["matcher"] = matcher;
+            group["hooks"] = new JsonArray(new JsonObject
             {
-                ["hooks"] = new JsonArray(new JsonObject
-                {
-                    ["type"] = "command",
-                    ["command"] = $"\"{exe}\" --hook {verb}",
-                }),
+                ["type"] = "command",
+                ["command"] = $"\"{exe}\" --hook {verb}",
             });
+            groups.Add(group);
         }
         Save(settingsPath, root);
     }
@@ -59,7 +60,7 @@ public static class Installer
 
     static void StripOurs(JsonObject hooks)
     {
-        foreach (var (ev, _) in Events)
+        foreach (var (ev, _, _) in Events)
         {
             if (hooks[ev] is not JsonArray groups) continue;
             for (int i = groups.Count - 1; i >= 0; i--)
@@ -80,6 +81,6 @@ public static class Installer
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true);
-        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
     }
 }

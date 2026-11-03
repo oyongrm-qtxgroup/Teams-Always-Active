@@ -14,13 +14,19 @@ static class Program
             case ["--hook", var verb]:
                 return Hook.Run(verb, Console.In, state);
             case ["--install"]:
-                Installer.MergeHooks(Installer.DefaultSettingsPath, exe);
-                Installer.RegisterStartup(exe);
-                return 0;
+                return Report(() =>
+                {
+                    Installer.MergeHooks(Installer.DefaultSettingsPath, exe);
+                    Installer.RegisterStartup(exe);
+                    return $"Installed. Claude Code hooks added to {Installer.DefaultSettingsPath}; starts at logon. Open new Claude Code sessions to pick up the hooks.";
+                });
             case ["--uninstall"]:
-                Installer.RemoveHooks(Installer.DefaultSettingsPath);
-                Installer.UnregisterStartup();
-                return 0;
+                return Report(() =>
+                {
+                    Installer.RemoveHooks(Installer.DefaultSettingsPath);
+                    Installer.UnregisterStartup();
+                    return "Uninstalled. Hooks and logon entry removed.";
+                });
         }
 
         using var mutex = new Mutex(true, @"Local\TeamsAlwaysActive", out bool first);
@@ -28,5 +34,20 @@ static class Program
         ApplicationConfiguration.Initialize();
         Application.Run(new TrayApp(state));
         return 0;
+    }
+
+    // WinExe has no console, so surface the outcome in a dialog.
+    static int Report(Func<string> action)
+    {
+        try
+        {
+            MessageBox.Show(action(), "Teams Always Active");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Teams Always Active", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return 1;
+        }
     }
 }

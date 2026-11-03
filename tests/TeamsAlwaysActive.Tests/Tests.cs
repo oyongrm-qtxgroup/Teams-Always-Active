@@ -135,7 +135,7 @@ public class InstallerTests : IDisposable
     JsonObject Read() => JsonNode.Parse(File.ReadAllText(Settings))!.AsObject();
 
     [Fact]
-    public void Merge_into_missing_file_adds_three_events()
+    public void Merge_into_missing_file_adds_four_events()
     {
         Installer.MergeHooks(Settings, Exe);
         var hooks = Read()["hooks"]!.AsObject();
@@ -144,6 +144,16 @@ public class InstallerTests : IDisposable
             (string?)hooks["UserPromptSubmit"]![0]!["hooks"]![0]!["command"]);
         Assert.Equal("command", (string?)hooks["Stop"]![0]!["hooks"]![0]!["type"]);
         Assert.EndsWith("--hook idle", (string?)hooks["SessionEnd"]![0]!["hooks"]![0]!["command"]);
+        Assert.Equal("idle_prompt", (string?)hooks["Notification"]![0]!["matcher"]);
+        Assert.EndsWith("--hook idle", (string?)hooks["Notification"]![0]!["hooks"]![0]!["command"]);
+    }
+
+    [Fact]
+    public void Merge_does_not_escape_existing_content()
+    {
+        File.WriteAllText(Settings, """{ "permissions": { "allow": ["Bash(a && b 'c' + <d>)"] } }""");
+        Installer.MergeHooks(Settings, Exe);
+        Assert.Contains("Bash(a && b 'c' + <d>)", File.ReadAllText(Settings));
     }
 
     [Fact]
@@ -175,6 +185,7 @@ public class InstallerTests : IDisposable
         Assert.Single(hooks["Stop"]!.AsArray());
         Assert.False(hooks.ContainsKey("UserPromptSubmit"));
         Assert.False(hooks.ContainsKey("SessionEnd"));
+        Assert.False(hooks.ContainsKey("Notification"));
     }
 
     [Fact]

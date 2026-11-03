@@ -40,18 +40,25 @@ public sealed class TrayApp : ApplicationContext
     void SetMode(Mode m)
     {
         mode = m;
-        state.WriteMode(m);
+        try { state.WriteMode(m); }
+        catch (IOException) { } // ponytail: transient disk errors shouldn't kill the tray; mode still applies in memory
+        catch (UnauthorizedAccessException) { }
         foreach (var (k, item) in items) item.Checked = k == m;
         Tick();
     }
 
     void Tick()
     {
-        bool busy = mode == Mode.Auto && state.AnyBusy(DateTime.UtcNow);
-        bool want = Decision.WantActive(mode, busy);
-        if (Decision.ShouldNudge(want, Native.IdleTime())) Native.PressF15();
-        tray.Icon = want ? green : grey;
-        tray.Text = $"Teams Always Active: {mode}" + (want ? " (keeping active)" : "");
+        try
+        {
+            bool busy = mode == Mode.Auto && state.AnyBusy(DateTime.UtcNow);
+            bool want = Decision.WantActive(mode, busy);
+            if (Decision.ShouldNudge(want, Native.IdleTime())) Native.PressF15();
+            tray.Icon = want ? green : grey;
+            tray.Text = $"Teams Always Active: {mode}" + (want ? " (keeping active)" : "");
+        }
+        catch (IOException) { } // ponytail: transient disk errors shouldn't kill the tray; the next tick retries
+        catch (UnauthorizedAccessException) { }
     }
 
     protected override void ExitThreadCore()
